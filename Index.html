@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="description" content="Herramienta interna RavenTechs para gestionar y modificar el portfolio de apps.">
+<meta name="theme-color" content="#0f1e3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AppDeApps">
+<title>AppDeApps — RavenTechs</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --navy:#0f1e3d;--navy2:#16284d;--navy3:#1e2f55;
+  --gold:#f0b84a;--gold2:#c49020;
+  --green:#16a34a;--green-bg:#dcfce7;
+  --red:#dc2626;--red-bg:#fee2e2;
+  --warn:#d97706;--warn-bg:#fef3c7;
+  --blue:#1d4ed8;--blue-bg:#dbeafe;
+  --bg:#eef0f6;--surface:#ffffff;--surface2:#f4f6fb;
+  --border:#dde1ec;--text:#0f1e3d;--muted:#6b7a99;
+  --shadow:0 2px 8px rgba(15,30,61,.08);
+  --shadow-md:0 4px 20px rgba(15,30,61,.12);
+  --radius:12px;--radius-sm:8px;
+  --font:'Inter',sans-serif;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;
+  --border:#334155;--text:#f1f5f9;--muted:#94a3b8;
+  --green-bg:#052e16;--red-bg:#3f0f0f;--warn-bg:#1c1000;--blue-bg:#0c2a5e;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.5;transition:background .2s,color .2s}
+button,input,select,textarea{font-family:var(--font)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hidden{display:none!important;pointer-events:none!important}
+.screen{display:none;min-height:100vh}
+.screen.active{display:flex}
+
+/* ── LOADING ── */
+#loading-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,var(--navy) 0%,#1a3060 100%);z-index:9999}
+#loading-screen .ld-icon{width:70px;height:70px;margin:0 auto 14px;animation:spin 1.4s linear infinite}
+#loading-screen .ld-title{font-size:20px;font-weight:800;color:#fff;text-align:center;margin-bottom:4px}
+#loading-screen .ld-sub{font-size:13px;color:rgba(255,255,255,.6);text-align:center}
+
+/* ── LOGIN ── */
+#screen-login.active{align-items:center;justify-content:center;background:linear-gradient(145deg,var(--navy) 0%,#1a3060 100%);padding:24px}
+.login-card{background:var(--surface);border-radius:20px;padding:40px 32px;width:100%;max-width:360px;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.35);animation:fadeUp .4s ease both}
+.login-icon{width:56px;height:56px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:26px}
+.login-title{font-size:22px;font-weight:800;color:var(--navy);margin-bottom:6px}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:26px}
+.field{margin-bottom:14px;text-align:left}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;color:var(--text);font-size:15px;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue)}
+.btn-primary{width:100%;padding:14px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 0 var(--navy3);transition:transform .1s}
+.btn-primary:active{transform:translateY(2px);box-shadow:0 2px 0 var(--navy3)}
+.btn-primary:disabled{opacity:.5;cursor:default}
+.login-err{background:var(--red-bg);color:var(--red);border:1px solid #fca5a5;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:14px;display:none}
+.login-err.show{display:block}
+
+/* ── APP LAYOUT ── */
+#screen-app.active{display:flex;width:100%}
+.sidebar{width:240px;min-width:240px;background:var(--navy);display:flex;flex-direction:column;padding:22px 14px;height:100vh;position:sticky;top:0;overflow-y:auto}
+[data-theme="dark"] .sidebar{background:#080f1e}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:0 8px 22px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:16px}
+.sb-brand-icon{width:34px;height:34px;background:var(--gold);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.sb-brand-name{font-size:16px;font-weight:800;color:#fff}
+.sb-brand-name span{color:var(--gold)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;color:rgba(255,255,255,.65);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:3px;transition:background .15s}
+.nav-item:hover{background:rgba(255,255,255,.06)}
+.nav-item.active{background:rgba(255,255,255,.12);color:#fff}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.sb-bottom{margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)}
+.sb-btn{width:100%;text-align:left;background:none;border:none;padding:10px 12px;border-radius:10px;color:rgba(255,255,255,.65);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
+.sb-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+.menu-btn-light{width:100%;text-align:left;background:none;border:none;padding:9px 8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.menu-btn-light:hover{background:var(--surface2)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10}
+.topbar-title{font-size:19px;font-weight:800;color:var(--text)}
+.topbar-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.page{padding:24px;flex:1}
+
+/* ── MOBILE NAV ── */
+.mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);border-top:1px solid rgba(255,255,255,.1);z-index:200}
+[data-theme="dark"] .mob-nav{background:#080f1e}
+.mob-nav-items{display:flex}
+.mob-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 4px 7px;font-size:10px;font-weight:600;color:rgba(255,255,255,.5);cursor:pointer;gap:3px}
+.mob-item.active{color:var(--gold)}
+.mob-icon{font-size:18px}
+@media(max-width:880px){
+  .sidebar{display:none}
+  .mob-nav{display:block}
+  .main{padding-bottom:60px}
+  .page{padding:16px}
+  .topbar{padding:14px 16px}
+}
+
+/* ── CARDS / REPO GRID ── */
+.repo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.repo-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:border-color .15s,transform .1s;box-shadow:var(--shadow)}
+.repo-card:hover{border-color:var(--blue);transform:translateY(-2px)}
+.repo-card.selected{border-color:var(--gold);background:var(--surface2)}
+.repo-icon{font-size:26px;margin-bottom:10px}
+.repo-name{font-size:15px;font-weight:800;color:var(--text);margin-bottom:3px}
+.repo-meta{font-size:11px;color:var(--muted)}
+.repo-status{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-top:10px}
+.repo-status.connected{background:var(--green-bg);color:var(--green)}
+.repo-status.pending{background:var(--warn-bg);color:var(--warn)}
+
+/* ── SECTION HEADERS ── */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.sec-title{font-size:17px;font-weight:800;color:var(--text)}
+.sec-sub{font-size:13px;color:var(--muted);margin-top:2px}
+
+/* ── TABS ── */
+.mod-tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);overflow-x:auto}
+.mod-tab{padding:10px 16px;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.mod-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── TEMPLATE CARDS ── */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.tpl-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:border-color .15s}
+.tpl-card:hover{border-color:var(--blue)}
+.tpl-icon{font-size:24px;margin-bottom:10px}
+.tpl-name{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px}
+.tpl-desc{font-size:12px;color:var(--muted);line-height:1.4}
+
+/* ── FORM PANEL ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
+.panel-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+textarea#free-request{min-height:120px;resize:vertical;font-size:14px;line-height:1.5}
+.char-count{font-size:11px;color:var(--muted);text-align:right;margin-top:4px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
+.btn:hover{border-color:var(--blue);background:var(--surface2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.gold{background:var(--gold);color:var(--navy);border-color:var(--gold-2);box-shadow:0 3px 0 var(--gold2)}
+.btn.navy{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.danger{background:var(--red-bg);color:var(--red);border-color:#fca5a5}
+.btn.full{width:100%;justify-content:center}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+
+/* ── AUDIT CHECKLIST ── */
+.audit-item{display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:8px;border:1px solid var(--border)}
+.audit-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0}
+.audit-icon.ok{background:var(--green-bg);color:var(--green)}
+.audit-icon.fail{background:var(--red-bg);color:var(--red)}
+.audit-icon.pending{background:var(--border);color:var(--muted)}
+.audit-label{font-size:13px;font-weight:700;color:var(--text)}
+.audit-detail{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* ── DIFF VIEW ── */
+.diff-box{background:#0d1117;border-radius:var(--radius-sm);padding:14px;font-family:'SF Mono',Consolas,monospace;font-size:12.5px;line-height:1.6;overflow-x:auto;max-height:420px;overflow-y:auto}
+.diff-line{white-space:pre;padding:1px 8px;border-radius:3px}
+.diff-line.add{background:rgba(34,197,94,.15);color:#86efac}
+.diff-line.del{background:rgba(239,68,68,.15);color:#fca5a5}
+.diff-line.ctx{color:#8b949e}
+.diff-meta{font-size:11px;color:var(--muted);margin-bottom:10px}
+
+/* ── HISTORY ── */
+.hist-item{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px}
+.hist-dot{width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0}
+.hist-info{flex:1;min-width:0}
+.hist-label{font-size:13px;font-weight:700;color:var(--text)}
+.hist-date{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty-icon{font-size:38px;margin-bottom:12px}
+.empty-msg{font-size:15px;font-weight:700;margin-bottom:5px;color:var(--text)}
+.empty-sub{font-size:13px}
+
+/* ── TOAST ── */
+#toast-wrap{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--navy);color:#fff;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);animation:fadeUp .3s ease both}
+.toast.err{background:var(--red)}
+.toast.ok{background:var(--green)}
+
+/* ── MODAL (popup OK?) ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:16px;width:100%;max-width:420px;padding:26px;animation:fadeUp .25s ease both}
+.modal-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:8px}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px}
+.badge.config{background:var(--warn-bg);color:var(--warn)}
+.badge.connected{background:var(--green-bg);color:var(--green)}
+
+.loading-wrap{display:flex;justify-content:center;padding:30px}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div style="text-align:center">
+    <svg class="ld-icon" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="#f0b84a" stroke-width="3" stroke-dasharray="60 40" stroke-linecap="round"/></svg>
+    <div class="ld-title">App<span style="color:#f0b84a">De</span>Apps</div>
+    <div class="ld-sub">Cargando panel de control...</div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen">
+  <div class="login-card">
+    <div class="login-icon">🛠️</div>
+    <div class="login-title">App<span style="color:var(--gold)">De</span>Apps</div>
+    <div class="login-sub">Panel interno · Solo RavenTechs</div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-primary" id="btn-google" style="background:#fff;color:#0f1e3d;border:2px solid #dde1ec;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;box-shadow:none">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.04a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.48A4.8 4.8 0 0 1 4.5 7.5V5.43H1.83a8 8 0 0 0 0 7.14l2.67-2.09z"/><path fill="#EA4335" d="M8.98 3.58c1.32 0 2.5.45 3.44 1.35l2.54-2.54A8 8 0 0 0 1.83 5.43L4.5 7.5c.66-1.97 2.49-3.92 4.48-3.92z"/></svg>
+      Continuar con Google
+    </button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;color:var(--muted);font-weight:600">o con email</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+    <div class="field"><label>Email</label><input id="f-email" type="email" placeholder="tu@email.com"/></div>
+    <div class="field"><label>Contraseña</label><input id="f-pass" type="password" placeholder="••••••••"/></div>
+    <button class="btn-primary" id="btn-login">Ingresar →</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="screen-app" class="screen">
+  <nav class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-brand-icon">🛠️</div>
+      <div class="sb-brand-name">App<span>De</span>Apps</div>
+    </div>
+    <div class="nav-item active" data-page="repos"><span class="nav-icon">📦</span>Repositorios</div>
+    <div class="nav-item" data-page="modificar"><span class="nav-icon">✏️</span>Modificar</div>
+    <div class="nav-item" data-page="auditoria"><span class="nav-icon">✅</span>Auditoría</div>
+    <div class="nav-item" data-page="demo"><span class="nav-icon">🔍</span>Demo</div>
+    <div class="nav-item" data-page="historial"><span class="nav-icon">🕘</span>Historial</div>
+    <div class="nav-item" data-page="config"><span class="nav-icon">⚙️</span>Configuración</div>
+    <div class="sb-bottom">
+      <button class="sb-btn" id="btn-theme">🌙 Modo oscuro</button>
+      <button class="sb-btn" id="btn-logout">⏻ Cerrar sesión</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <span class="topbar-title" id="page-title">Repositorios</span>
+        <div class="topbar-sub" id="page-sub">Elegí qué app del portfolio vas a modificar</div>
+      </div>
+      <div style="position:relative">
+        <div id="topbar-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;cursor:pointer">R</div>
+        <div id="topbar-user-menu" class="hidden" style="position:absolute;top:46px;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);min-width:200px;z-index:300;padding:10px">
+          <div id="tum-email" style="font-size:12px;color:var(--muted);padding:6px 8px 10px;border-bottom:1px solid var(--border);margin-bottom:6px;word-break:break-all">—</div>
+          <button id="btn-theme-mob" class="menu-btn-light">🌙 Modo oscuro</button>
+          <button id="btn-logout-mob" class="menu-btn-light" style="color:var(--red)">⏻ Cerrar sesión</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: REPOS -->
+    <div id="page-repos" class="page"></div>
+
+    <!-- PAGE: MODIFICAR -->
+    <div id="page-modificar" class="page" style="display:none"></div>
+
+    <!-- PAGE: AUDITORIA -->
+    <div id="page-auditoria" class="page" style="display:none"></div>
+
+    <!-- PAGE: DEMO -->
+    <div id="page-demo" class="page" style="display:none"></div>
+
+    <!-- PAGE: HISTORIAL -->
+    <div id="page-historial" class="page" style="display:none"></div>
+
+    <!-- PAGE: CONFIG -->
+    <div id="page-config" class="page" style="display:none"></div>
+  </div>
+
+  <div class="mob-nav">
+    <div class="mob-nav-items">
+      <div class="mob-item active" data-page="repos"><span class="mob-icon">📦</span>Repos</div>
+      <div class="mob-item" data-page="modificar"><span class="mob-icon">✏️</span>Modificar</div>
+      <div class="mob-item" data-page="auditoria"><span class="mob-icon">✅</span>Auditar</div>
+      <div class="mob-item" data-page="demo"><span class="mob-icon">🔍</span>Demo</div>
+      <div class="mob-item" data-page="historial"><span class="mob-icon">🕘</span>Historial</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Crear repositorio nuevo -->
+<div class="modal-overlay" id="modal-crear-repo">
+  <div class="modal">
+    <div class="modal-title">＋ Crear repositorio nuevo</div>
+    <div class="modal-sub">Crea el repo vacío en GitHub, sube el index.html que tengas listo, y activa GitHub Pages — todo en un solo paso.</div>
+    <div class="field"><label>Nombre del repo (minúsculas, sin espacios)</label><input id="cr-nombre-repo" placeholder="garrafar"/></div>
+    <div class="field"><label>Nombre visible de la app</label><input id="cr-nombre-app" placeholder="GarrafAR"/></div>
+    <div class="field"><label>Ícono (un emoji)</label><input id="cr-icono" placeholder="🔥" maxlength="2"/></div>
+    <div class="field"><label>Proyecto de Firebase (opcional, lo podés completar después)</label><input id="cr-firebase-project" placeholder="garrafar-xxxxx"/></div>
+    <div class="field">
+      <label>index.html inicial</label>
+      <div id="cr-archivo-wrap" class="foto-wrap" onclick="document.getElementById('cr-archivo-input').click()" style="padding:14px">
+        <div id="cr-archivo-nombre" style="font-size:13px;color:var(--muted)">📄 Tocá para elegir el archivo HTML</div>
+        <input type="file" id="cr-archivo-input" accept=".html" style="display:none"/>
+      </div>
+    </div>
+    <div id="cr-progreso" style="display:none;margin:14px 0">
+      <div class="audit-item"><div class="audit-icon pending" id="cr-step-1-icon">1</div><div class="audit-label" id="cr-step-1-label">Creando repositorio en GitHub...</div></div>
+      <div class="audit-item"><div class="audit-icon pending" id="cr-step-2-icon">2</div><div class="audit-label" id="cr-step-2-label">Subiendo index.html...</div></div>
+      <div class="audit-item"><div class="audit-icon pending" id="cr-step-3-icon">3</div><div class="audit-label" id="cr-step-3-label">Activando GitHub Pages...</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn full" id="btn-cancelar-crear-repo">Cancelar</button>
+      <button class="btn gold full" id="btn-confirmar-crear-repo">Crear repositorio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ¿Guardamos esta versión como OK? -->
+<div class="modal-overlay" id="modal-version-ok">
+  <div class="modal">
+    <div class="modal-title">¿Guardamos esta versión como OK?</div>
+    <div class="modal-sub">Probaste la demo y quedó funcionando bien. Si confirmás, queda guardada en el historial de las últimas 3 versiones buenas de este repo.</div>
+    <div class="btn-row">
+      <button class="btn full" id="btn-version-no">No, todavía no</button>
+      <button class="btn green full" id="btn-version-si">✓ Sí, guardar como OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
+
+<script>
+function sanitizeHTML(str){const d=document.createElement('div');d.textContent=str??'';return d.innerHTML;}
+function toast(msg,type=''){
+  const el=document.createElement('div');el.className='toast'+(type?' '+type:'');
+  el.textContent=(type==='err'?'❌ ':type==='ok'?'✅ ':'')+msg;
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(()=>el.remove(),3200);
+}
+function emptyHTML(icon,msg,sub=''){return`<div class="empty"><div class="empty-icon">${icon}</div><div class="empty-msg">${msg}</div>${sub?`<div class="empty-sub">${sub}</div>`:''}</div>`;}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+/* ── TEMA ── */
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  const btn=document.getElementById('btn-theme');
+  const btnMob=document.getElementById('btn-theme-mob');
+  if(btn)btn.textContent=t==='dark'?'🌞 Modo claro':'🌙 Modo oscuro';
+  if(btnMob)btnMob.textContent=t==='dark'?'🌞 Modo claro':'🌙 Modo oscuro';
+  localStorage.setItem('aa-theme',t);
+}
+function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');}
+function initTheme(){applyTheme(localStorage.getItem('aa-theme')||'light');}
+initTheme();
+
+/* ── ESTADO GLOBAL ── */
+let me=null;
+let currentPage='repos';
+let repoSeleccionado=null;
+let archivoActual=null;       // contenido del index.html traído de GitHub
+let archivoModificado=null;   // resultado del cambio (plantilla o Claude)
+let ultimaAuditoria=null;     // resultado de la auditoría corrida
+let modoModificar='plantillas'; // 'plantillas' | 'libre'
+
+/* ── REPOS DEL PORTFOLIO (configuración local — se completa con GitHub real más adelante) ── */
+const REPOS=[
+  {id:'securepro',nombre:'SecurePro',icon:'🔒',repo:'raventechs/securepro',firebaseProject:'pro-a247e',conectado:true},
+  {id:'saludar',nombre:'SaludAR',icon:'❤️',repo:'raventechs/saludar',firebaseProject:'',conectado:true},
+  {id:'puntoventa',nombre:'PuntoVenta',icon:'💰',repo:'raventechs/puntoventa',firebaseProject:'',conectado:true},
+  {id:'vehigest-ar',nombre:'Rodix',icon:'🚗',repo:'raventechs/vehigest-ar',firebaseProject:'',conectado:true},
+  {id:'ahorrar',nombre:'AhorrAR',icon:'🛒',repo:'raventechs/ahorrar',firebaseProject:'',conectado:true},
+  {id:'traductor-habitos',nombre:'Traductor de Hábitos',icon:'🧠',repo:'raventechs/traductor-habitos',firebaseProject:'',conectado:true},
+  {id:'miagenda',nombre:'MiAgenda',icon:'📅',repo:'raventechs/miagenda',firebaseProject:'',conectado:false},
+  {id:'charlar',nombre:'CharlAR',icon:'💬',repo:'raventechs/charlar',firebaseProject:'',conectado:false},
+];
+
+/* ── PLANTILLAS DE MODIFICACIÓN (Camino A — sin IA) ── */
+const PLANTILLAS=[
+  {id:'nombre-logo',icon:'🏷️',nombre:'Nombre / logo / color de marca',desc:'Cambiar el nombre de la app, el ícono o el color principal del tema.'},
+  {id:'email-contacto',icon:'✉️',nombre:'Email de contacto del demo',desc:'Cambiar el email al que se manda el botón "Contactar" del demo wall.'},
+  {id:'pin-admin',icon:'🔢',nombre:'PIN del panel admin',desc:'Cambiar el código de 4 dígitos para entrar al panel oculto.'},
+  {id:'campo-form',icon:'📝',nombre:'Campo simple en un formulario',desc:'Agregar o quitar un campo de texto/número en un formulario existente.'},
+  {id:'texto-fijo',icon:'💬',nombre:'Texto fijo (botón / mensaje)',desc:'Cambiar el texto de un botón, título o mensaje que ya existe.'},
+];
+
+/* ── AUTH (placeholder — login real con Firebase se conecta después) ── */
+const SUPERUSER_EMAILS=['rgaraventa@gmail.com']; // único acceso permitido a AppDeApps
+
+function entrarALaApp(emailUsuario){
+  me={email:emailUsuario};
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('screen-login').classList.remove('active');
+  document.getElementById('screen-app').classList.add('active');
+  document.getElementById('topbar-avatar').textContent=emailUsuario.substring(0,1).toUpperCase();
+  document.getElementById('tum-email').textContent=emailUsuario;
+  renderPage('repos');
+}
+
+document.getElementById('btn-login').addEventListener('click',()=>{
+  const email=document.getElementById('f-email').value.trim();
+  const pass=document.getElementById('f-pass').value;
+  const errEl=document.getElementById('login-err');
+  errEl.classList.remove('show');
+  if(!email||!pass){errEl.textContent='Completá los dos campos';errEl.classList.add('show');return;}
+  if(!SUPERUSER_EMAILS.includes(email)){errEl.textContent='Esta cuenta no tiene acceso a AppDeApps';errEl.classList.add('show');return;}
+  // TODO: reemplazar por signInWithEmailAndPassword(auth,email,pass) cuando se conecte Firebase real
+  entrarALaApp(email);
+});
+document.getElementById('btn-google').addEventListener('click',async()=>{
+  const errEl=document.getElementById('login-err');
+  errEl.classList.remove('show');
+  const btn=document.getElementById('btn-google');
+  btn.disabled=true;btn.textContent='Conectando...';
+  try{
+    // TODO: reemplazar por signInWithPopup(auth, new GoogleAuthProvider()) cuando se conecte Firebase real
+    await new Promise(r=>setTimeout(r,600));
+    const emailSimulado=SUPERUSER_EMAILS[0];
+    if(!SUPERUSER_EMAILS.includes(emailSimulado)){
+      errEl.textContent='Esta cuenta no tiene acceso a AppDeApps';errEl.classList.add('show');
+      btn.disabled=false;btn.textContent='Continuar con Google';return;
+    }
+    entrarALaApp(emailSimulado);
+  }catch(e){
+    errEl.textContent='Error al iniciar con Google';errEl.classList.add('show');
+  }
+  btn.disabled=false;
+  btn.innerHTML=`<svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.04a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.48A4.8 4.8 0 0 1 4.5 7.5V5.43H1.83a8 8 0 0 0 0 7.14l2.67-2.09z"/><path fill="#EA4335" d="M8.98 3.58c1.32 0 2.5.45 3.44 1.35l2.54-2.54A8 8 0 0 0 1.83 5.43L4.5 7.5c.66-1.97 2.49-3.92 4.48-3.92z"/></svg> Continuar con Google`;
+});
+document.getElementById('btn-logout').addEventListener('click',()=>{
+  me=null;repoSeleccionado=null;archivoActual=null;archivoModificado=null;ultimaAuditoria=null;
+  document.getElementById('screen-app').classList.remove('active');
+  document.getElementById('screen-login').classList.add('active');
+});
+document.getElementById('btn-theme').addEventListener('click',toggleTheme);
+
+document.getElementById('topbar-avatar').addEventListener('click',e=>{
+  e.stopPropagation();
+  document.getElementById('topbar-user-menu').classList.toggle('hidden');
+});
+document.addEventListener('click',e=>{
+  const menu=document.getElementById('topbar-user-menu');
+  if(menu&&!menu.classList.contains('hidden')&&!menu.contains(e.target)&&e.target.id!=='topbar-avatar'){
+    menu.classList.add('hidden');
+  }
+});
+document.getElementById('btn-theme-mob').addEventListener('click',()=>{toggleTheme();document.getElementById('topbar-user-menu').classList.add('hidden');});
+document.getElementById('btn-logout-mob').addEventListener('click',()=>{
+  document.getElementById('topbar-user-menu').classList.add('hidden');
+  document.getElementById('btn-logout').click();
+});
+
+/* Ocultar loading apenas carga, mostrar login (sin sesión persistida todavía) */
+window.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(()=>{
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('screen-login').classList.add('active');
+  },400);
+});
+
+/* ── NAVEGACIÓN ── */
+const PAGE_TITLES={
+  repos:{title:'Repositorios',sub:'Elegí qué app del portfolio vas a modificar'},
+  modificar:{title:'Modificar',sub:'Plantilla rápida o pedido libre'},
+  auditoria:{title:'Auditoría',sub:'Checklist antes de aplicar el cambio'},
+  demo:{title:'Demo',sub:'Probar el cambio en una rama aparte antes de aplicar'},
+  historial:{title:'Historial',sub:'Últimas 3 versiones guardadas como OK'},
+  config:{title:'Configuración',sub:'Conexiones a GitHub y Firebase'},
+};
+function renderPage(page){
+  currentPage=page;
+  document.getElementById('page-title').textContent=PAGE_TITLES[page].title;
+  document.getElementById('page-sub').textContent=PAGE_TITLES[page].sub;
+  document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+  document.getElementById('page-'+page).style.display='block';
+  document.querySelectorAll('.nav-item,.mob-item').forEach(n=>n.classList.toggle('active',n.dataset.page===page));
+  if(page==='repos')renderRepos();
+  else if(page==='modificar')renderModificar();
+  else if(page==='auditoria')renderAuditoria();
+  else if(page==='demo')renderDemo();
+  else if(page==='historial')renderHistorial();
+  else if(page==='config')renderConfig();
+}
+document.querySelectorAll('.nav-item[data-page],.mob-item[data-page]').forEach(n=>n.addEventListener('click',()=>renderPage(n.dataset.page)));
+
+/* ── PAGE: REPOSITORIOS ── */
+function renderRepos(){
+  const el=document.getElementById('page-repos');
+  el.innerHTML=`
+    <div class="sec-header"><span class="sec-title">Repositorios del portfolio</span><button class="btn navy" id="btn-crear-repo">＋ Crear repo nuevo</button></div>
+    <div class="repo-grid">${REPOS.map(r=>`
+    <div class="repo-card${repoSeleccionado?.id===r.id?' selected':''}" data-repo-id="${r.id}">
+      <div class="repo-icon">${r.icon}</div>
+      <div class="repo-name">${sanitizeHTML(r.nombre)}</div>
+      <div class="repo-meta">${sanitizeHTML(r.repo)}</div>
+      <div class="repo-status ${r.conectado?'connected':'pending'}">${r.conectado?'✓ Conectado':'⏳ Sin conectar'}</div>
+    </div>`).join('')}</div>`;
+  el.querySelector('#btn-crear-repo').addEventListener('click',()=>openModal('modal-crear-repo'));
+  el.querySelectorAll('.repo-card').forEach(card=>{
+    card.addEventListener('click',()=>{
+      const r=REPOS.find(x=>x.id===card.dataset.repoId);
+      if(!r.conectado){toast('Este repo todavía no tiene el token de GitHub configurado — vas a poder conectarlo desde Configuración','err');return;}
+      repoSeleccionado=r;
+      archivoActual=null;archivoModificado=null;ultimaAuditoria=null;
+      toast(`${r.nombre} seleccionado`,'ok');
+      renderPage('modificar');
+    });
+  });
+}
+
+/* ── PAGE: MODIFICAR ── */
+function renderModificar(){
+  const el=document.getElementById('page-modificar');
+  if(!repoSeleccionado){el.innerHTML=emptyHTML('📦','Elegí un repositorio primero','Volvé a Repositorios y seleccioná una app');return;}
+  el.innerHTML=`
+    <div class="sec-header">
+      <div><div class="sec-title">${repoSeleccionado.icon} ${sanitizeHTML(repoSeleccionado.nombre)}</div><div class="sec-sub">${sanitizeHTML(repoSeleccionado.repo)}</div></div>
+      <button class="btn" id="btn-traer-archivo">📥 Traer index.html actual</button>
+    </div>
+    <div id="archivo-status" class="diff-meta" style="margin-bottom:16px">${archivoActual?'✅ Archivo cargado — '+archivoActual.length+' caracteres':'Todavía no se trajo el archivo actual de GitHub'}</div>
+    <div class="mod-tabs">
+      <div class="mod-tab${modoModificar==='plantillas'?' active':''}" data-modo="plantillas">📋 Plantillas rápidas</div>
+      <div class="mod-tab${modoModificar==='libre'?' active':''}" data-modo="libre">✍️ Pedido libre</div>
+    </div>
+    <div id="modificar-content"></div>`;
+  el.querySelector('#btn-traer-archivo').addEventListener('click',traerArchivoActual);
+  el.querySelectorAll('.mod-tab').forEach(t=>t.addEventListener('click',()=>{modoModificar=t.dataset.modo;renderModificar();}));
+  renderModificarContent();
+}
+
+function renderModificarContent(){
+  const el=document.getElementById('modificar-content');
+  if(!el)return;
+  if(modoModificar==='plantillas'){
+    el.innerHTML=`<div class="tpl-grid">${PLANTILLAS.map(t=>`
+      <div class="tpl-card" data-tpl-id="${t.id}">
+        <div class="tpl-icon">${t.icon}</div>
+        <div class="tpl-name">${sanitizeHTML(t.nombre)}</div>
+        <div class="tpl-desc">${sanitizeHTML(t.desc)}</div>
+      </div>`).join('')}</div>`;
+    el.querySelectorAll('.tpl-card').forEach(card=>{
+      card.addEventListener('click',()=>abrirFormularioPlantilla(card.dataset.tplId));
+    });
+  } else {
+    el.innerHTML=`
+      <div class="panel">
+        <div class="panel-title">✍️ Describí el cambio que necesitás</div>
+        <div class="field">
+          <textarea id="free-request" placeholder="Ej: Agregá un selector de fecha en la sección Ventas para poder ver días anteriores, igual que hicimos en PuntoVenta..."></textarea>
+        </div>
+        <div class="char-count" id="free-char-count">0 caracteres</div>
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn navy" id="btn-generar-cambio" ${archivoActual?'':'disabled'}>🤖 Generar cambio con Claude</button>
+        </div>
+        ${!archivoActual?'<div class="diff-meta" style="margin-top:10px;color:var(--warn)">⚠️ Primero traé el archivo actual del repo</div>':''}
+      </div>`;
+    const textarea=el.querySelector('#free-request');
+    textarea.addEventListener('input',()=>{document.getElementById('free-char-count').textContent=textarea.value.length+' caracteres';});
+    el.querySelector('#btn-generar-cambio')?.addEventListener('click',generarCambioConClaude);
+  }
+}
+
+async function traerArchivoActual(){
+  if(!repoSeleccionado)return;
+  const btn=document.getElementById('btn-traer-archivo');
+  btn.disabled=true;btn.textContent='Conectando con GitHub...';
+  try{
+    // TODO: reemplazar por llamada real a GitHub API (vía backend/Cloud Function, nunca con el token expuesto en este HTML)
+    // const res = await fetch(`/api/github/file?repo=${repoSeleccionado.repo}&path=index.html`);
+    // archivoActual = await res.text();
+    await new Promise(r=>setTimeout(r,900)); // simulación de la llamada mientras no está conectado
+    archivoActual='<!-- contenido simulado del index.html — se conecta a GitHub API en la fase de backend -->';
+    toast('Archivo traído correctamente','ok');
+  }catch(e){
+    toast('Error al conectar con GitHub','err');
+  }
+  btn.disabled=false;btn.textContent='📥 Traer index.html actual';
+  renderModificar();
+}
+
+function abrirFormularioPlantilla(tplId){
+  const tpl=PLANTILLAS.find(t=>t.id===tplId);
+  if(!archivoActual){toast('Primero traé el archivo actual del repo','err');return;}
+  const el=document.getElementById('modificar-content');
+  let camposHTML='';
+  if(tplId==='nombre-logo'){
+    camposHTML=`<div class="field"><label>Nuevo nombre de la app</label><input id="tpl-nombre" placeholder="Ej: SecurePro"/></div>
+      <div class="field"><label>Color principal (hex)</label><input id="tpl-color" placeholder="#0f1e3d"/></div>`;
+  } else if(tplId==='email-contacto'){
+    camposHTML=`<div class="field"><label>Nuevo email de contacto</label><input id="tpl-email" type="email" placeholder="ventas@raventechsapp.com"/></div>`;
+  } else if(tplId==='pin-admin'){
+    camposHTML=`<div class="field"><label>Nuevo PIN (4 dígitos)</label><input id="tpl-pin" maxlength="4" placeholder="1990"/></div>`;
+  } else if(tplId==='campo-form'){
+    camposHTML=`<div class="field"><label>ID del formulario donde agregar el campo</label><input id="tpl-form-id" placeholder="modal-cliente"/></div>
+      <div class="field"><label>Nombre del campo nuevo</label><input id="tpl-campo-nombre" placeholder="Ej: Teléfono alternativo"/></div>`;
+  } else if(tplId==='texto-fijo'){
+    camposHTML=`<div class="field"><label>Texto actual (a buscar)</label><input id="tpl-texto-viejo" placeholder="Texto exacto que aparece hoy"/></div>
+      <div class="field"><label>Texto nuevo</label><input id="tpl-texto-nuevo" placeholder="Texto que va a aparecer en su lugar"/></div>`;
+  }
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">${tpl.icon} ${sanitizeHTML(tpl.nombre)}</div>
+      ${camposHTML}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" id="btn-volver-plantillas">← Volver</button>
+        <button class="btn navy" id="btn-aplicar-plantilla">Generar cambio</button>
+      </div>
+    </div>`;
+  el.querySelector('#btn-volver-plantillas').addEventListener('click',renderModificarContent);
+  el.querySelector('#btn-aplicar-plantilla').addEventListener('click',()=>generarCambioPlantilla(tplId));
+}
+
+function generarCambioPlantilla(tplId){
+  // TODO: lógica real de búsqueda-y-reemplazo sobre archivoActual según cada plantilla.
+  // Por ahora deja preparado el resultado para que el flujo de auditoría/demo/aplicar funcione end-to-end.
+  archivoModificado=archivoActual+'\n<!-- modificado vía plantilla: '+tplId+' -->';
+  ultimaAuditoria=null;
+  toast('Cambio generado — pasá a Auditoría para verificarlo','ok');
+  renderPage('auditoria');
+}
+
+async function generarCambioConClaude(){
+  const textarea=document.getElementById('free-request');
+  const pedido=textarea.value.trim();
+  if(!pedido){toast('Describí el cambio que necesitás','err');return;}
+  const btn=document.getElementById('btn-generar-cambio');
+  btn.disabled=true;btn.textContent='Generando...';
+  try{
+    // TODO: reemplazar por la llamada real a la API de Claude, vía backend.
+    // El prompt de sistema debe incluir SIEMPRE el bloque fijo de reglas de auditoría del portfolio
+    // (ver PLANTILLA_PROMPT_SISTEMA más abajo) + el archivoActual completo + el pedido del usuario.
+    await new Promise(r=>setTimeout(r,1200));
+    archivoModificado=archivoActual+'\n<!-- modificado vía Claude: '+sanitizeHTML(pedido)+' -->';
+    ultimaAuditoria=null;
+    toast('Cambio generado — pasá a Auditoría para verificarlo','ok');
+    renderPage('auditoria');
+  }catch(e){
+    toast('Error al generar el cambio','err');
+  }
+  btn.disabled=false;btn.textContent='🤖 Generar cambio con Claude';
+}
+
+/*
+PLANTILLA_PROMPT_SISTEMA — bloque fijo que se manda siempre junto al pedido libre.
+Se completa en la fase de backend. Debe incluir como mínimo:
+- Estándar RavenTechs: single-file HTML, Firebase compat, GitHub Pages, auth Google+email, light/dark.
+- Checklist de auditoría: balance de llaves, IDs únicos, sanitizeHTML en innerHTML con datos de usuario,
+  metas PWA, sintaxis JS válida, nunca pasar una función directo a addEventListener sin envolver en arrow function.
+- Devolver el archivo HTML completo modificado, no solo el fragmento cambiado.
+*/
+
+/* ── PAGE: AUDITORÍA ── */
+function renderAuditoria(){
+  const el=document.getElementById('page-auditoria');
+  if(!archivoModificado){el.innerHTML=emptyHTML('✏️','Sin cambios para auditar','Generá un cambio primero desde Modificar');return;}
+  el.innerHTML=`
+    <div class="sec-header">
+      <div><div class="sec-title">Checklist de auditoría</div><div class="sec-sub">${repoSeleccionado.icon} ${sanitizeHTML(repoSeleccionado.nombre)}</div></div>
+      <button class="btn navy" id="btn-efectuar-auditoria">✅ Efectuar auditoría</button>
+    </div>
+    <div id="audit-results"></div>`;
+  el.querySelector('#btn-efectuar-auditoria').addEventListener('click',efectuarAuditoria);
+  if(ultimaAuditoria)renderAuditResults();
+  else document.getElementById('audit-results').innerHTML=emptyHTML('✅','Todavía no se corrió la auditoría','Tocá el botón de arriba para validar el cambio');
+}
+
+const AUDIT_CHECKS=[
+  {id:'llaves',label:'Balance de llaves { }'},
+  {id:'ids',label:'Sin IDs duplicados riesgosos'},
+  {id:'sintaxis',label:'Sintaxis JS válida (Node --check)'},
+  {id:'sanitize',label:'sanitizeHTML en datos de usuario'},
+  {id:'pwa',label:'Metas PWA presentes'},
+  {id:'cierre',label:'Cierre correcto del HTML'},
+];
+
+function efectuarAuditoria(){
+  const btn=document.getElementById('btn-efectuar-auditoria');
+  btn.disabled=true;btn.textContent='Auditando...';
+  document.getElementById('audit-results').innerHTML='<div class="loading-wrap"><div class="spinner"></div></div>';
+  setTimeout(()=>{
+    // TODO: reemplazar por los checks reales (mismo motor bash que usamos a mano: grep de llaves,
+    // node --check sobre el script extraído, grep de sanitizeHTML, etc.) corridos del lado del backend.
+    ultimaAuditoria=AUDIT_CHECKS.map(c=>({...c,pass:true,detail:'OK'}));
+    btn.disabled=false;btn.textContent='✅ Efectuar auditoría';
+    renderAuditResults();
+    toast('Auditoría completada','ok');
+  },1100);
+}
+
+function renderAuditResults(){
+  const el=document.getElementById('audit-results');
+  const todoOk=ultimaAuditoria.every(c=>c.pass);
+  el.innerHTML=`
+    ${ultimaAuditoria.map(c=>`
+      <div class="audit-item">
+        <div class="audit-icon ${c.pass?'ok':'fail'}">${c.pass?'✓':'✕'}</div>
+        <div><div class="audit-label">${sanitizeHTML(c.label)}</div><div class="audit-detail">${sanitizeHTML(c.detail)}</div></div>
+      </div>`).join('')}
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn" id="btn-ir-demo">🔍 Probar en demo</button>
+      <button class="btn gold" id="btn-aplicar" ${todoOk?'':'disabled'}>🚀 Aplicar a producción</button>
+    </div>
+    ${!todoOk?'<div class="diff-meta" style="margin-top:10px;color:var(--red)">⚠️ Hay puntos que no pasaron — no se puede aplicar hasta corregirlos</div>':''}`;
+  el.querySelector('#btn-ir-demo').addEventListener('click',()=>renderPage('demo'));
+  el.querySelector('#btn-aplicar')?.addEventListener('click',aplicarAProduccion);
+}
+
+/* ── PAGE: DEMO ── */
+let demoUrl=null;
+function renderDemo(){
+  const el=document.getElementById('page-demo');
+  if(!archivoModificado){el.innerHTML=emptyHTML('🔍','Sin cambios para probar','Generá un cambio primero desde Modificar');return;}
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">🔍 Generar demo de prueba</div>
+      <div class="sec-sub" style="margin-bottom:16px">Crea una rama nueva en GitHub (no toca producción) y la sirve en un link aparte para que la veas funcionando de verdad antes de aplicar.</div>
+      <button class="btn navy" id="btn-generar-demo">🌿 Generar demo en rama aparte</button>
+    </div>
+    <div id="demo-result"></div>`;
+  el.querySelector('#btn-generar-demo').addEventListener('click',generarDemo);
+  if(demoUrl)renderDemoResult();
+}
+
+async function generarDemo(){
+  const btn=document.getElementById('btn-generar-demo');
+  btn.disabled=true;btn.textContent='Creando rama y publicando...';
+  document.getElementById('demo-result').innerHTML='<div class="loading-wrap"><div class="spinner"></div></div>';
+  try{
+    // TODO: backend crea la rama preview-{timestamp}, commitea archivoModificado ahí (no en main),
+    // y activa GitHub Pages para esa rama. Devuelve la URL real.
+    await new Promise(r=>setTimeout(r,1300));
+    demoUrl=`https://raventechs.github.io/${repoSeleccionado?.id}/preview/`;
+    toast('Demo generada','ok');
+  }catch(e){toast('Error al generar la demo','err');}
+  btn.disabled=false;btn.textContent='🌿 Generar demo en rama aparte';
+  renderDemoResult();
+}
+
+function renderDemoResult(){
+  const el=document.getElementById('demo-result');
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">✅ Demo lista</div>
+      <div class="field"><label>Link de la demo</label><input value="${sanitizeHTML(demoUrl)}" readonly/></div>
+      <div class="btn-row">
+        <a class="btn navy" href="${sanitizeHTML(demoUrl)}" target="_blank" rel="noopener">↗ Abrir demo</a>
+        <button class="btn green" id="btn-marcar-ok">✓ Funcionó bien — preguntar si guardar</button>
+      </div>
+    </div>`;
+  el.querySelector('#btn-marcar-ok').addEventListener('click',()=>openModal('modal-version-ok'));
+}
+
+/* ── APLICAR A PRODUCCIÓN ── */
+async function aplicarAProduccion(){
+  if(!confirm(`¿Aplicar este cambio a producción en ${repoSeleccionado.repo}? Esto va a actualizar la app real.`))return;
+  toast('Aplicando a producción...','');
+  try{
+    // TODO: backend hace el commit real a main del repo
+    await new Promise(r=>setTimeout(r,1000));
+
+    // Si el cambio tocó colecciones/reglas nuevas, publicar reglas + crear índices que falten
+    const indicesNuevos=detectarIndicesNecesarios(archivoModificado);
+    if(indicesNuevos.length){
+      toast(`Publicando reglas y creando ${indicesNuevos.length} índice${indicesNuevos.length>1?'s':''} nuevo${indicesNuevos.length>1?'s':''}...`,'');
+      await crearIndicesCompuestos(indicesNuevos);
+    }
+
+    toast(`Subido a ${repoSeleccionado.repo}`,'ok');
+    openModal('modal-version-ok');
+  }catch(e){toast('Error al aplicar','err');}
+}
+
+/* ── ÍNDICES COMPUESTOS AUTOMÁTICOS ── */
+function detectarIndicesNecesarios(htmlModificado){
+  // Busca dentro del comentario de reglas del archivo la sección "ÍNDICES COMPUESTOS"
+  // y devuelve la lista para crearlos por API en vez de que Rubén los tipee a mano.
+  if(!htmlModificado)return[];
+  const match=htmlModificado.match(/ÍNDICES COMPUESTOS([\s\S]*?)(?:\n\n|NOTAS PARA)/);
+  if(!match)return[];
+  const lineas=match[1].split('\n').map(l=>l.trim()).filter(l=>l&&/^\d+\./.test(l));
+  return lineas.map(l=>l.replace(/^\d+\.\s*/,''));
+}
+
+async function crearIndicesCompuestos(lista){
+  for(const indiceDesc of lista){
+    // TODO: reemplazar por la llamada real a la Firebase Admin API / gcloud Firestore indexes create,
+    // usando repoSeleccionado.firebaseProject como proyecto destino. La descripción viene en formato
+    // "coleccion | campo1 ASC, campo2 DESC" — hay que parsearla y mandarla con el formato que pide la API.
+    console.log('Creando índice (simulado):',indiceDesc);
+    await new Promise(r=>setTimeout(r,400));
+  }
+}
+
+/* ── MODAL: GUARDAR VERSIÓN OK ── */
+document.getElementById('btn-version-no').addEventListener('click',()=>closeModal('modal-version-ok'));
+document.getElementById('btn-version-si').addEventListener('click',()=>{
+  // TODO: backend guarda esta versión en el historial curado (máx 3 por repo, descarta la más vieja).
+  closeModal('modal-version-ok');
+  toast('Versión guardada en el historial','ok');
+  renderPage('historial');
+});
+
+/* ── PAGE: HISTORIAL ── */
+function renderHistorial(){
+  const el=document.getElementById('page-historial');
+  if(!repoSeleccionado){el.innerHTML=emptyHTML('🕘','Elegí un repositorio primero');return;}
+  // TODO: traer del backend el historial real (máx 3 versiones marcadas OK) para repoSeleccionado.id
+  const historialSimulado=[];
+  el.innerHTML=`
+    <div class="sec-header"><div class="sec-title">${repoSeleccionado.icon} ${sanitizeHTML(repoSeleccionado.nombre)}</div></div>
+    ${historialSimulado.length===0?emptyHTML('🕘','Sin versiones guardadas todavía','Cuando confirmes una demo como OK, va a aparecer acá'):
+      historialSimulado.map(h=>`<div class="hist-item"><div class="hist-dot"></div><div class="hist-info"><div class="hist-label">${sanitizeHTML(h.label)}</div><div class="hist-date">${sanitizeHTML(h.date)}</div></div><button class="btn">↩ Restaurar</button></div>`).join('')}`;
+}
+
+/* ── PAGE: CONFIGURACIÓN ── */
+/* ── CREAR REPOSITORIO NUEVO ── */
+let archivoIniciaContenido=null;
+
+document.getElementById('cr-archivo-input').addEventListener('change',e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  document.getElementById('cr-archivo-nombre').textContent='📄 '+file.name;
+  const reader=new FileReader();
+  reader.onload=ev=>{archivoIniciaContenido=ev.target.result;};
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-cancelar-crear-repo').addEventListener('click',()=>{
+  closeModal('modal-crear-repo');
+  resetFormCrearRepo();
+});
+
+function resetFormCrearRepo(){
+  document.getElementById('cr-nombre-repo').value='';
+  document.getElementById('cr-nombre-app').value='';
+  document.getElementById('cr-icono').value='';
+  document.getElementById('cr-firebase-project').value='';
+  document.getElementById('cr-archivo-input').value='';
+  document.getElementById('cr-archivo-nombre').textContent='📄 Tocá para elegir el archivo HTML';
+  document.getElementById('cr-progreso').style.display='none';
+  ['1','2','3'].forEach(n=>{
+    document.getElementById('cr-step-'+n+'-icon').className='audit-icon pending';
+    document.getElementById('cr-step-'+n+'-icon').textContent=n;
+  });
+  archivoIniciaContenido=null;
+}
+
+function marcarPasoCrearRepo(n,estado){
+  // estado: 'doing' | 'ok' | 'fail'
+  const icon=document.getElementById('cr-step-'+n+'-icon');
+  if(estado==='doing'){icon.className='audit-icon pending';icon.innerHTML='<div class="spinner" style="width:14px;height:14px;border-width:2px"></div>';}
+  else if(estado==='ok'){icon.className='audit-icon ok';icon.textContent='✓';}
+  else{icon.className='audit-icon fail';icon.textContent='✕';}
+}
+
+document.getElementById('btn-confirmar-crear-repo').addEventListener('click',async()=>{
+  const nombreRepo=document.getElementById('cr-nombre-repo').value.trim().toLowerCase();
+  const nombreApp=document.getElementById('cr-nombre-app').value.trim();
+  const icono=document.getElementById('cr-icono').value.trim()||'📦';
+  const firebaseProject=document.getElementById('cr-firebase-project').value.trim();
+  if(!nombreRepo||!nombreApp){toast('Completá nombre del repo y nombre de la app','err');return;}
+  if(!/^[a-z0-9-]+$/.test(nombreRepo)){toast('El nombre del repo solo puede tener minúsculas, números y guiones','err');return;}
+  if(REPOS.some(r=>r.id===nombreRepo)){toast('Ya existe un repo con ese nombre en la lista','err');return;}
+  if(!archivoIniciaContenido){toast('Elegí el archivo index.html inicial','err');return;}
+
+  const btn=document.getElementById('btn-confirmar-crear-repo');
+  btn.disabled=true;
+  document.getElementById('cr-progreso').style.display='block';
+
+  try{
+    // PASO 1: crear el repositorio vacío en GitHub
+    marcarPasoCrearRepo(1,'doing');
+    // TODO: reemplazar por la llamada real a la API de GitHub (vía backend, nunca con el token expuesto):
+    // POST https://api.github.com/orgs/raventechs/repos  { name: nombreRepo, private: false }
+    await new Promise(r=>setTimeout(r,900));
+    marcarPasoCrearRepo(1,'ok');
+
+    // PASO 2: subir el index.html inicial
+    marcarPasoCrearRepo(2,'doing');
+    // TODO: reemplazar por la llamada real a la API de GitHub (Contents API):
+    // PUT https://api.github.com/repos/raventechs/{nombreRepo}/contents/index.html
+    // body: { message: "Primera versión", content: base64(archivoIniciaContenido) }
+    await new Promise(r=>setTimeout(r,900));
+    marcarPasoCrearRepo(2,'ok');
+
+    // PASO 3: activar GitHub Pages sobre la rama main
+    marcarPasoCrearRepo(3,'doing');
+    // TODO: reemplazar por la llamada real a la API de GitHub (Pages API):
+    // POST https://api.github.com/repos/raventechs/{nombreRepo}/pages  { source: { branch: "main", path: "/" } }
+    await new Promise(r=>setTimeout(r,900));
+    marcarPasoCrearRepo(3,'ok');
+
+    // Agregar el repo nuevo a la lista local
+    REPOS.push({
+      id:nombreRepo,nombre:nombreApp,icon:icono,
+      repo:`raventechs/${nombreRepo}`,firebaseProject,conectado:true
+    });
+
+    toast(`Repositorio raventechs/${nombreRepo} creado — ya está publicado`,'ok');
+    setTimeout(()=>{
+      closeModal('modal-crear-repo');
+      resetFormCrearRepo();
+      renderRepos();
+    },800);
+  }catch(e){
+    toast('Error al crear el repositorio','err');
+  }
+  btn.disabled=false;
+});
+
+function renderConfig(){
+  const el=document.getElementById('page-config');
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">🔑 Token de GitHub</div>
+      <div class="sec-sub" style="margin-bottom:14px">Personal Access Token con permisos sobre los repos de raventechs. Se guarda del lado del backend, nunca en este HTML.</div>
+      <div class="field"><label>Token</label><input id="cfg-github-token" type="password" placeholder="ghp_••••••••••••••••"/></div>
+      <button class="btn navy" id="btn-guardar-token">Guardar token</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🔥 Proyectos de Firebase conectados</div>
+      ${REPOS.map(r=>`<div class="audit-item"><div class="audit-icon ${r.firebaseProject?'ok':'pending'}">${r.firebaseProject?'✓':'?'}</div><div><div class="audit-label">${sanitizeHTML(r.nombre)}</div><div class="audit-detail">${r.firebaseProject?sanitizeHTML(r.firebaseProject):'Sin proyecto configurado'}</div></div></div>`).join('')}
+    </div>`;
+  el.querySelector('#btn-guardar-token').addEventListener('click',()=>{
+    // TODO: enviar al backend para guardar de forma segura (nunca en localStorage ni en este archivo).
+    toast('Esta función se completa cuando conectemos el backend','err');
+  });
+}
+</script>
+</body>
+</html>

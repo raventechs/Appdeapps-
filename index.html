@@ -448,7 +448,7 @@ async function seleccionarRepo(nombre){
         <div class="file-meta-pills">
           <span class="pill">${lineas} líneas</span>
           <span class="pill">${kb} KB</span>
-          <span class="pill">SHA ${data.sha.slice(0,7)}</span>
+          <span class="pill" id="upload-sha-actual">SHA ${data.sha.slice(0,7)}</span>
         </div>
       </div>
       <button class="btn-primary" id="btn-auditar" style="margin-bottom:16px">🔍 Efectuar auditoría</button>
@@ -459,9 +459,23 @@ async function seleccionarRepo(nombre){
         <button class="btn-primary" id="btn-generar-cambios">✨ Generar cambios con IA</button>
         <div id="patch-result" style="margin-top:16px"></div>
       </div>
-      <pre class="code-box">${escaparHTML(contenido)}</pre>`;
-    document.getElementById('btn-auditar').addEventListener('click', ()=>ejecutarAuditoria(contenido));
+      <div class="req-card">
+        <div class="sec-title" style="font-size:15px;margin-bottom:10px">📤 Subir / actualizar archivo</div>
+        <div class="field"><label>Cargar un archivo .html desde tu computadora (opcional — también podés pegar directo abajo)</label><input type="file" id="upload-file-picker" accept=".html"/></div>
+        <div class="field"><label>Contenido a subir (es el que va a quedar en el repo)</label><textarea id="upload-content" class="req-textarea" style="min-height:340px;font-family:monospace;font-size:12px">${escaparHTML(contenido)}</textarea></div>
+        <div class="field"><label>Mensaje del commit</label><input type="text" id="commit-msg" placeholder="Actualización vía AppDeApps" value="Actualización vía AppDeApps"/></div>
+        <button class="btn-primary" id="btn-subir-archivo">📤 Subir a GitHub</button>
+      </div>`;
+    document.getElementById('btn-auditar').addEventListener('click', ()=>ejecutarAuditoria(document.getElementById('upload-content').value));
     document.getElementById('btn-generar-cambios').addEventListener('click', ()=>generarCambios(nombre));
+    document.getElementById('upload-file-picker').addEventListener('change', e=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => { document.getElementById('upload-content').value = reader.result; };
+      reader.readAsText(file);
+    });
+    document.getElementById('btn-subir-archivo').addEventListener('click', ()=>subirArchivo(nombre));
   }catch(e){
     console.error('Error al traer index.html:', e);
     fv.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>No se pudo traer el archivo.<br>${e.message}</div>`;
@@ -732,6 +746,45 @@ function renderPortfolioGrid(){
       <div class="repo-meta">${a.completitud||0}% completo</div>
     </div>`).join('');
   grid.querySelectorAll('.repo-card').forEach(c=>c.addEventListener('click', ()=>abrirEditorApp(c.dataset.id)));
+}
+
+// ── SUBIR / ACTUALIZAR ARCHIVO DIRECTO A GITHUB ───────────
+async function subirArchivo(nombreRepo){
+  const nuevoContenido = document.getElementById('upload-content').value;
+  if(!nuevoContenido.trim()){ toast('El contenido no puede estar vacío','err'); return; }
+  const mensaje = document.getElementById('commit-msg').value.trim() || 'Actualización vía AppDeApps';
+  const btn = document.getElementById('btn-subir-archivo');
+  btn.disabled = true; btn.textContent = 'Subiendo...';
+  try{
+    // Volvemos a pedir el SHA justo antes de subir, por si el archivo cambió en GitHub mientras lo editabas
+    let shaActual = null;
+    const shaRes = await fetch(`https://api.github.com/repos/${GH_ORG}/${nombreRepo}/contents/index.html`, {
+      headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if(shaRes.ok){ const d = await shaRes.json(); shaActual = d.sha; }
+
+    const contenidoB64 = btoa(unescape(encodeURIComponent(nuevoContenido)));
+    const body = { message: mensaje, content: contenidoB64 };
+    if(shaActual) body.sha = shaActual;
+
+    const res = await fetch(`https://api.github.com/repos/${GH_ORG}/${nombreRepo}/contents/index.html`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.message || ('Error ' + res.status));
+    }
+    const data = await res.json();
+    contenidoActual = nuevoContenido;
+    document.getElementById('upload-sha-actual').textContent = 'SHA ' + data.content.sha.slice(0,7);
+    toast('Subido a GitHub ✅ — GitHub Pages tarda 1-2 min en reflejarlo', 'green');
+  }catch(e){
+    console.error('Error al subir archivo:', e);
+    toast('Error al subir: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = '📤 Subir a GitHub';
 }
 
 document.getElementById('btn-nueva-app').addEventListener('click', ()=>abrirEditorApp(null));

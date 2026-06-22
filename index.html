@@ -138,6 +138,8 @@ pre.code-box{background:#0b1120;color:#d6deeb;padding:18px;border-radius:var(--r
   <div class="topbar">
     <div class="topbar-brand">App<span>DeApps</span></div>
     <div class="topbar-right">
+      <button class="tb-btn" id="btn-nav-portfolio">📊 Portfolio</button>
+      <button class="tb-btn" id="btn-nav-repos">📦 GitHub</button>
       <button class="tb-btn" id="btn-theme">🌙</button>
       <button class="tb-btn" id="btn-logout">⏻ Salir</button>
     </div>
@@ -166,6 +168,44 @@ pre.code-box{background:#0b1120;color:#d6deeb;padding:18px;border-radius:var(--r
     <div id="repos-list"></div>
     <div id="file-view" class="file-view hidden"></div>
   </div>
+
+  <!-- PORTFOLIO -->
+  <div id="page-portfolio" class="container hidden">
+    <div id="portfolio-grid-view">
+      <div class="sec-title">📊 Portfolio RavenTechs</div>
+      <div class="sec-sub">Estado real, técnico y comercial de cada app — solo para vos</div>
+      <div style="margin-bottom:16px"><button class="tb-btn" id="btn-nueva-app" style="background:var(--gold);color:var(--navy)">➕ Nueva app</button></div>
+      <div id="portfolio-grid" class="repo-grid"></div>
+    </div>
+    <div id="portfolio-edit-view" class="hidden">
+      <span class="back-link" id="btn-volver-portfolio">← Volver al portfolio</span>
+      <div class="card" style="margin-top:14px">
+        <div class="field"><label>Ícono (emoji)</label><input id="pf-icono" placeholder="📱" style="max-width:90px"/></div>
+        <div class="field"><label>Nombre de la app *</label><input id="pf-nombre" placeholder="SaludAR"/></div>
+        <div class="field"><label>Estado</label>
+          <select id="pf-estado" style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:15px">
+            <option value="produccion">🟢 En producción</option>
+            <option value="desarrollo">🔵 En desarrollo</option>
+            <option value="pendiente_auditoria">🟠 Pendiente de auditoría</option>
+            <option value="pausado">⚪ Pausado</option>
+          </select>
+        </div>
+        <div class="field"><label>% Completitud (0-100)</label><input id="pf-completitud" type="number" min="0" max="100" placeholder="80" style="max-width:120px"/></div>
+        <div class="field"><label>Descripción — qué hace, para quién</label><textarea id="pf-descripcion" class="req-textarea" placeholder="Gestión de turnos y medicación para..."></textarea></div>
+        <div class="field"><label>Pitch comercial — cómo se la vendés a un cliente</label><textarea id="pf-pitch" class="req-textarea" placeholder="Le ahorra al cliente..."></textarea></div>
+        <div class="field"><label>Repo de GitHub</label><input id="pf-repo" placeholder="raventechs/saludar"/></div>
+        <div class="field"><label>Proyecto de Firebase</label><input id="pf-firebase" placeholder="saludar-b565d"/></div>
+        <div class="field"><label>Notas técnicas</label><textarea id="pf-stack" class="req-textarea" placeholder="Firebase compat, Groq IA, particularidades..."></textarea></div>
+        <div class="field"><label>Features plus activas</label><textarea id="pf-features-activas" class="req-textarea" placeholder="Una por línea"></textarea></div>
+        <div class="field"><label>Features plus / pendientes para sumar</label><textarea id="pf-features-pendientes" class="req-textarea" placeholder="Una por línea"></textarea></div>
+        <div class="field"><label>Notas libres / ideas sueltas</label><textarea id="pf-notas" class="req-textarea" placeholder="Cualquier cosa que se te ocurra..."></textarea></div>
+        <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
+          <button class="btn-primary" id="btn-guardar-app" style="flex:1">💾 Guardar</button>
+          <button class="btn-primary" id="btn-eliminar-app" style="flex:0 0 auto;background:var(--danger)">🗑️ Eliminar app</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -173,7 +213,7 @@ pre.code-box{background:#0b1120;color:#d6deeb;padding:18px;border-radius:var(--r
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ── CONFIG FIREBASE — proyecto AppDeApps ──
 const FB = {
@@ -292,7 +332,16 @@ async function cargarTokenGuardado(uid){
 function mostrarPagina(p){
   document.getElementById('page-token').classList.toggle('hidden', p !== 'token');
   document.getElementById('page-repos').classList.toggle('hidden', p !== 'repos');
+  document.getElementById('page-portfolio').classList.toggle('hidden', p !== 'portfolio');
 }
+
+document.getElementById('btn-nav-repos').addEventListener('click', ()=>{
+  if(githubToken) mostrarPagina('repos'); else mostrarPagina('token');
+});
+document.getElementById('btn-nav-portfolio').addEventListener('click', ()=>{
+  mostrarPagina('portfolio');
+  cargarPortfolio();
+});
 
 document.getElementById('btn-save-token').addEventListener('click', async ()=>{
   const token = document.getElementById('f-token').value.trim();
@@ -566,6 +615,202 @@ function escaparHTML(str){
   d.textContent = str;
   return d.innerHTML;
 }
+
+// ── PORTFOLIO (panel privado de estado de apps) ───────────
+let portfolioApps = [];
+let appEditandoId = null;
+
+const ESTADO_LABEL = {
+  produccion: '🟢 En producción',
+  desarrollo: '🔵 En desarrollo',
+  pendiente_auditoria: '🟠 Pendiente de auditoría',
+  pausado: '⚪ Pausado'
+};
+const ESTADO_COLOR = {
+  produccion: 'var(--green)',
+  desarrollo: 'var(--blue)',
+  pendiente_auditoria: '#b45309',
+  pausado: 'var(--muted)'
+};
+
+// Datos iniciales conocidos — se siembran solo una vez, si la colección está vacía
+const SEMILLA_PORTFOLIO = [
+  { id:'saludar', icono:'💊', nombre:'SaludAR', estado:'produccion', completitud:95,
+    descripcion:'Gestión de medicación y turnos médicos, con recordatorios.',
+    pitch:'Para pacientes que toman varios medicamentos o tienen turnos frecuentes: nunca más se olvidan una toma ni un turno.',
+    repo:'raventechs/saludar', firebase:'saludar-b565d',
+    stack:'Firebase compat. Cloud Functions de push notifications (FCM) ya armadas y listas, pendiente desplegar desde un PC con Firebase CLI.',
+    featuresActivas:'', featuresPendientes:'Push notifications (deploy pendiente)\nEliminar usuario en panel admin',
+    notas:'', orden:1 },
+  { id:'rodix', icono:'🚗', nombre:'Rodix (VehiGest-AR)', estado:'produccion', completitud:100,
+    descripcion:'Gestión de flota: vehículos, documentación (VTV, seguro, patente) y services.',
+    pitch:'Para quien tiene 1 o varios vehículos (particular o flota chica): controla vencimientos y mantenimiento en un solo lugar.',
+    repo:'raventechs/vehigest-ar', firebase:'vehigest-ar',
+    stack:'Firebase ES modules (no compat). Auditado completo.',
+    featuresActivas:'Límite de vehículos por cuenta (limiteVehiculos)\nEliminar usuario completo desde admin',
+    featuresPendientes:'', notas:'Primera app con el patrón completo de features + eliminar usuario validado en producción.', orden:2 },
+  { id:'securepro', icono:'🛡️', nombre:'SecurePro', estado:'produccion', completitud:90,
+    descripcion:'CRM para empresas de seguridad electrónica: clientes, cámaras, alarmas, cercos, accesos, calendario de mantenimiento.',
+    pitch:'Para instaladores de seguridad electrónica: organiza clientes y mantenimientos, antes era todo en cuadernos o Excel.',
+    repo:'raventechs/securepro', firebase:'pro-a247e',
+    stack:'Firebase ES modules. Modelo de roles owner/editor/viewer por negocio.',
+    featuresActivas:'', featuresPendientes:'Eliminar usuario\nProbar invitación de equipo en vivo\nBackups Firestore (necesita plan Blaze)\nPWA + APK vía PWABuilder (primera del portfolio)',
+    notas:'Originada como CRM interno para el negocio de seguridad de Rubén.', orden:3 },
+  { id:'puntoventa', icono:'🛒', nombre:'PuntoVenta', estado:'produccion', completitud:90,
+    descripcion:'Punto de venta para comercios chicos: ventas, gastos, empleados, múltiples negocios.',
+    pitch:'Para kioscos, almacenes y comercios chicos: reemplaza el cuaderno de ventas y gastos, con empleados y cuentas corrientes de clientes.',
+    repo:'raventechs/puntoventa', firebase:'puntoventa-f316c',
+    stack:'Firebase compat. En uso real con un cliente.',
+    featuresActivas:'Límite de negocios (limiteNegocios)\nMorosidad / cuenta corriente de clientes (cobro genera venta automática)',
+    featuresPendientes:'Eliminar usuario completo desde admin\nCRUD completo de empleados en auditoría',
+    notas:'Plus de Morosidad recién lanzado — validar con un caso real antes de replicar a otras apps.', orden:4 },
+  { id:'ahorrar', icono:'💰', nombre:'AhorrAR', estado:'produccion', completitud:70,
+    descripcion:'Control de ahorros y finanzas personales.',
+    pitch:'Para quien quiere llevar un control simple de sus ahorros mes a mes.',
+    repo:'raventechs/ahorrar', firebase:'ahorrar-rt',
+    stack:'Firebase compat.',
+    featuresActivas:'', featuresPendientes:'Auditoría completa de estándares\nEliminar usuario\nFeatures plus a definir',
+    notas:'', orden:5 },
+  { id:'miagenda', icono:'📅', nombre:'MiAgenda', estado:'produccion', completitud:75,
+    descripcion:'Agenda de estudio para estudiantes, con recordatorios configurables y niveles de urgencia por color.',
+    pitch:'Para estudiantes que necesitan organizar entregas y exámenes sin olvidarse de nada.',
+    repo:'rgaraventa-ux/miagenda', firebase:'miagenda-37996',
+    stack:'Firebase compat. Deploy en Netlify (https://miagenda2.netlify.app/), look Benetton-inspired, tipografía Fredoka One/Nunito.',
+    featuresActivas:'', featuresPendientes:'Auditoría completa de estándares\nEliminar usuario\nFeatures plus a definir',
+    notas:'', orden:6 },
+  { id:'charlar', icono:'💬', nombre:'CharlAR', estado:'pendiente_auditoria', completitud:80,
+    descripcion:'Asistente conversacional con IA y reconocimiento de voz.',
+    pitch:'Para quien necesita un asistente de voz simple e integrado a su negocio.',
+    repo:'raventechs/charlar', firebase:'charlar-e5408',
+    stack:'Firebase compat. Usa Groq (llama-3.1-8b-instant) para IA y Web Speech API para voz.',
+    featuresActivas:'', featuresPendientes:'Corregir 4 errores de auditoría (ID duplicado voice-last-msg, falta clase .hidden explícita, faltan metas PWA, closePin/toggleTheme pasados directo a addEventListener)\nEliminar usuario\nFeatures plus a definir',
+    notas:'', orden:7 },
+  { id:'garrafar', icono:'🔥', nombre:'GarrafAR', estado:'desarrollo', completitud:40,
+    descripcion:'Gestión para distribución/venta de garrafas.',
+    pitch:'Para distribuidores de garrafas: control de stock y clientes.',
+    repo:'', firebase:'(pendiente)',
+    stack:'Código subido al repo, falta activar Authentication, crear Firestore de producción, pegar reglas (firestore-rules-garrafar.txt) y crear 9 índices compuestos documentados al final del HTML.',
+    featuresActivas:'', featuresPendientes:'Completar setup de Firebase de punta a punta', notas:'', orden:8 },
+  { id:'appdeapps', icono:'🛠️', nombre:'AppDeApps', estado:'desarrollo', completitud:60,
+    descripcion:'Herramienta interna (solo para Rubén) para auditar y modificar el resto del portfolio, y ahora también llevar este panel.',
+    pitch:'Uso 100% interno, no se vende.',
+    repo:'Appdeapps-', firebase:'appdeapps',
+    stack:'Login restringido a rgaraventa@gmail.com. Conexión a GitHub vía token guardado en Firestore. Auditoría automática de 8 checks.',
+    featuresActivas:'Auditoría automática de HTML\nEste panel de Portfolio',
+    featuresPendientes:'Motor de IA con parches pausado (era difícil iterar) — priorizar en su lugar: subir/actualizar index.html directo a GitHub, aplicar reglas de Firestore directo, crear índices compuestos directo, todo sin pasar por IA',
+    notas:'', orden:9 }
+];
+
+async function cargarPortfolio(){
+  const grid = document.getElementById('portfolio-grid');
+  grid.innerHTML = `<div class="empty"><span class="spinner dark"></span>Cargando portfolio...</div>`;
+  try{
+    let snap = await getDocs(collection(db,'portfolio'));
+    if(snap.empty){
+      await Promise.all(SEMILLA_PORTFOLIO.map(a=>setDoc(doc(db,'portfolio',a.id),{...a,createdAt:serverTimestamp()})));
+      snap = await getDocs(collection(db,'portfolio'));
+    }
+    portfolioApps = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.orden??99)-(b.orden??99));
+    renderPortfolioGrid();
+  }catch(e){
+    console.error('Error al cargar portfolio:', e);
+    grid.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>No se pudo cargar el portfolio.<br>${escaparHTML(e.message)}</div>`;
+  }
+}
+
+function renderPortfolioGrid(){
+  const grid = document.getElementById('portfolio-grid');
+  if(portfolioApps.length===0){ grid.innerHTML = `<div class="empty"><div class="empty-icon">📊</div>Sin apps todavía</div>`; return; }
+  grid.innerHTML = portfolioApps.map(a=>`
+    <div class="repo-card" data-id="${a.id}">
+      <div style="font-size:26px;margin-bottom:6px">${escaparHTML(a.icono||'📱')}</div>
+      <div class="repo-name">${escaparHTML(a.nombre||'Sin nombre')}</div>
+      <div style="font-size:11px;font-weight:700;color:${ESTADO_COLOR[a.estado]||'var(--muted)'};margin:4px 0">${ESTADO_LABEL[a.estado]||a.estado||''}</div>
+      <div style="height:6px;background:var(--surface2);border-radius:99px;overflow:hidden;margin:6px 0">
+        <div style="height:100%;width:${a.completitud||0}%;background:var(--gold2)"></div>
+      </div>
+      <div class="repo-meta">${a.completitud||0}% completo</div>
+    </div>`).join('');
+  grid.querySelectorAll('.repo-card').forEach(c=>c.addEventListener('click', ()=>abrirEditorApp(c.dataset.id)));
+}
+
+document.getElementById('btn-nueva-app').addEventListener('click', ()=>abrirEditorApp(null));
+document.getElementById('btn-volver-portfolio').addEventListener('click', ()=>{
+  document.getElementById('portfolio-edit-view').classList.add('hidden');
+  document.getElementById('portfolio-grid-view').classList.remove('hidden');
+});
+
+function abrirEditorApp(id){
+  appEditandoId = id;
+  const a = id ? portfolioApps.find(x=>x.id===id) : null;
+  document.getElementById('pf-icono').value = a?.icono || '';
+  document.getElementById('pf-nombre').value = a?.nombre || '';
+  document.getElementById('pf-estado').value = a?.estado || 'desarrollo';
+  document.getElementById('pf-completitud').value = a?.completitud ?? '';
+  document.getElementById('pf-descripcion').value = a?.descripcion || '';
+  document.getElementById('pf-pitch').value = a?.pitch || '';
+  document.getElementById('pf-repo').value = a?.repo || '';
+  document.getElementById('pf-firebase').value = a?.firebase || '';
+  document.getElementById('pf-stack').value = a?.stack || '';
+  document.getElementById('pf-features-activas').value = a?.featuresActivas || '';
+  document.getElementById('pf-features-pendientes').value = a?.featuresPendientes || '';
+  document.getElementById('pf-notas').value = a?.notas || '';
+  document.getElementById('btn-eliminar-app').style.display = id ? 'block' : 'none';
+  document.getElementById('portfolio-grid-view').classList.add('hidden');
+  document.getElementById('portfolio-edit-view').classList.remove('hidden');
+}
+
+document.getElementById('btn-guardar-app').addEventListener('click', async ()=>{
+  const nombre = document.getElementById('pf-nombre').value.trim();
+  if(!nombre){ toast('El nombre es obligatorio', 'err'); return; }
+  const data = {
+    icono: document.getElementById('pf-icono').value.trim() || '📱',
+    nombre,
+    estado: document.getElementById('pf-estado').value,
+    completitud: parseInt(document.getElementById('pf-completitud').value) || 0,
+    descripcion: document.getElementById('pf-descripcion').value.trim(),
+    pitch: document.getElementById('pf-pitch').value.trim(),
+    repo: document.getElementById('pf-repo').value.trim(),
+    firebase: document.getElementById('pf-firebase').value.trim(),
+    stack: document.getElementById('pf-stack').value.trim(),
+    featuresActivas: document.getElementById('pf-features-activas').value.trim(),
+    featuresPendientes: document.getElementById('pf-features-pendientes').value.trim(),
+    notas: document.getElementById('pf-notas').value.trim()
+  };
+  const btn = document.getElementById('btn-guardar-app');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try{
+    if(appEditandoId){
+      await updateDoc(doc(db,'portfolio',appEditandoId), data);
+    } else {
+      const slug = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('app-'+Date.now());
+      data.orden = portfolioApps.length + 1;
+      await setDoc(doc(db,'portfolio',slug), {...data, createdAt: serverTimestamp()});
+    }
+    toast('Guardado', 'green');
+    await cargarPortfolio();
+    document.getElementById('portfolio-edit-view').classList.add('hidden');
+    document.getElementById('portfolio-grid-view').classList.remove('hidden');
+  }catch(e){
+    console.error('Error al guardar app:', e);
+    toast('Error al guardar: '+e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = '💾 Guardar';
+});
+
+document.getElementById('btn-eliminar-app').addEventListener('click', async ()=>{
+  if(!appEditandoId) return;
+  if(!confirm('¿Eliminar esta app del portfolio? Esto no borra el repo ni el proyecto de Firebase, solo esta ficha de registro.')) return;
+  try{
+    await deleteDoc(doc(db,'portfolio',appEditandoId));
+    toast('Eliminada del portfolio');
+    await cargarPortfolio();
+    document.getElementById('portfolio-edit-view').classList.add('hidden');
+    document.getElementById('portfolio-grid-view').classList.remove('hidden');
+  }catch(e){
+    toast('Error al eliminar: '+e.message, 'err');
+  }
+});
 </script>
 
 <!--
@@ -577,11 +822,14 @@ service cloud.firestore {
     match /configGithub/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+    match /portfolio/{appId} {
+      allow read, write: if request.auth != null && request.auth.token.email == 'rgaraventa@gmail.com';
+    }
   }
 }
 
 ÍNDICES COMPUESTOS
-Ninguno necesario en esta primera versión (solo lectura por uid, sin queries compuestas).
+Ninguno necesario (la colección portfolio se lee completa y se ordena en el cliente).
 -->
 </body>
 </html>

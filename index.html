@@ -87,6 +87,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .audit-icon{font-size:15px;flex-shrink:0;margin-top:1px}
 .audit-name{font-weight:700;color:var(--text)}
 .audit-detail{color:var(--muted);font-size:12px;margin-top:1px}
+.req-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
+.req-textarea{width:100%;min-height:90px;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:14px;font-family:inherit;resize:vertical;margin-bottom:12px}
+.patch-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px}
+.patch-status{font-size:12px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.patch-status.ok{color:var(--green)}
+.patch-status.err{color:var(--danger)}
+.diff-block{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.diff-block{grid-template-columns:1fr}}
+.diff-col-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
+pre.diff-pre{background:#0b1120;color:#d6deeb;padding:10px 12px;border-radius:8px;font-size:11px;line-height:1.5;overflow:auto;max-height:220px;white-space:pre-wrap;word-break:break-word;margin:0}
+pre.diff-pre.removed{border-left:3px solid var(--danger)}
+pre.diff-pre.added{border-left:3px solid var(--green)}
 pre.code-box{background:#0b1120;color:#d6deeb;padding:18px;border-radius:var(--radius-sm);font-size:12px;line-height:1.6;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-word}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);z-index:999;opacity:0;transition:opacity .2s,bottom .2s}
 .toast.show{opacity:1;bottom:34px}
@@ -184,6 +196,7 @@ let githubToken = null;
 let repos = [];
 let repoSeleccionado = null;
 let contenidoActual = null;
+let contenidoModificado = null;
 
 function toast(msg, tipo){
   const t = document.getElementById('toast');
@@ -391,8 +404,15 @@ async function seleccionarRepo(nombre){
       </div>
       <button class="btn-primary" id="btn-auditar" style="margin-bottom:16px">🔍 Efectuar auditoría</button>
       <div id="audit-result"></div>
+      <div class="req-card">
+        <div class="sec-title" style="font-size:15px;margin-bottom:10px">🤖 Pedido de modificación</div>
+        <textarea class="req-textarea" id="req-texto" placeholder="Describí el cambio puntual que querés hacer en esta app (ej: 'cambiar el color del botón principal a verde', 'agregar un campo de teléfono al formulario de cliente')"></textarea>
+        <button class="btn-primary" id="btn-generar-cambios">✨ Generar cambios con IA</button>
+        <div id="patch-result" style="margin-top:16px"></div>
+      </div>
       <pre class="code-box">${escaparHTML(contenido)}</pre>`;
     document.getElementById('btn-auditar').addEventListener('click', ()=>ejecutarAuditoria(contenido));
+    document.getElementById('btn-generar-cambios').addEventListener('click', ()=>generarCambios(nombre));
   }catch(e){
     console.error('Error al traer index.html:', e);
     fv.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>No se pudo traer el archivo.<br>${e.message}</div>`;
@@ -454,6 +474,91 @@ function ejecutarAuditoria(contenido){
         return `<div class="audit-row"><span class="audit-icon">${icon}</span><div><div class="audit-name">${c.nombre}</div><div class="audit-detail">${escaparHTML(c.detalle)}</div></div></div>`;
       }).join('')}
     </div>`;
+}
+
+// ── PEDIDO DE MODIFICACIÓN (Camino B: texto libre + IA) ───
+const INSTRUCCIONES_FIJAS = `Eres un asistente que modifica apps RavenTechs (HTML único + Firebase Auth/Firestore compat, GitHub Pages). Reglas del portfolio que SIEMPRE debés respetar:
+- Nunca pasar una función directo a addEventListener si espera parámetros opcionales: usar addEventListener('click',()=>miFuncion()) en vez de addEventListener('click',miFuncion).
+- La clase CSS "hidden" debe estar definida como display:none!important.
+- Usar sanitizeHTML() en todo innerHTML que renderice datos de usuario.
+- No romper la estructura existente, los IDs existentes, ni el flujo de autenticación.
+- Mantener el estilo de código ya presente en el archivo (comillas, indentación, nombres de funciones en español).
+
+Tu tarea: dado un archivo HTML completo y un pedido de cambio puntual, devolvés ÚNICAMENTE un JSON (sin texto antes ni después, sin \`\`\`) con esta forma exacta:
+{"resumen":"breve descripción del cambio","patches":[{"find":"fragmento EXACTO y único del archivo original a reemplazar","replace":"fragmento nuevo que lo reemplaza"}]}
+Cada "find" tiene que ser un fragmento literal que aparezca EXACTAMENTE UNA VEZ en el archivo (suficientemente largo para ser único, pero lo más acotado posible). Si el pedido requiere varios cambios en distintas partes del archivo, devolvé varios patches. Si el pedido es ambiguo o no se puede resolver con reemplazos puntuales, devolvé {"resumen":"...","patches":[],"error":"explicación breve"}.`;
+
+async function generarCambios(nombreRepo){
+  const pedido = document.getElementById('req-texto').value.trim();
+  const resultEl = document.getElementById('patch-result');
+  if(!pedido){ toast('Describí el cambio que querés hacer','err'); return; }
+  if(!contenidoActual){ toast('Primero traé el archivo del repo','err'); return; }
+  const btn = document.getElementById('btn-generar-cambios');
+  btn.disabled = true; btn.textContent = 'Generando...';
+  resultEl.innerHTML = `<div class="empty"><span class="spinner dark"></span>Pensando los cambios para ${nombreRepo}...</div>`;
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: INSTRUCCIONES_FIJAS,
+        messages: [
+          { role: 'user', content: `ARCHIVO ACTUAL (${nombreRepo}/index.html):\n\n${contenidoActual}\n\n---\nPEDIDO: ${pedido}` }
+        ]
+      })
+    });
+    if(!res.ok) throw new Error('Error de la API: ' + res.status);
+    const data = await res.json();
+    const texto = data.content.map(b=>b.text||'').join('\n').trim();
+    const limpio = texto.replace(/^```json\s*|^```\s*|```\s*$/g,'').trim();
+    const parsed = JSON.parse(limpio);
+    aplicarPatchesYMostrar(parsed, nombreRepo);
+  }catch(e){
+    console.error('Error al generar cambios:', e);
+    resultEl.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>No se pudo generar el cambio.<br>${escaparHTML(e.message)}</div>`;
+  }
+  btn.disabled = false; btn.textContent = '✨ Generar cambios con IA';
+}
+
+function aplicarPatchesYMostrar(parsed, nombreRepo){
+  const resultEl = document.getElementById('patch-result');
+  if(parsed.error){
+    resultEl.innerHTML = `<div class="empty"><div class="empty-icon">🤔</div>${escaparHTML(parsed.error)}</div>`;
+    return;
+  }
+  if(!parsed.patches || parsed.patches.length===0){
+    resultEl.innerHTML = `<div class="empty"><div class="empty-icon">🤷</div>La IA no propuso ningún cambio concreto. Probá ser más específico en el pedido.</div>`;
+    return;
+  }
+  let trabajo = contenidoActual;
+  const resultados = parsed.patches.map(p=>{
+    const apariciones = trabajo.split(p.find).length - 1;
+    if(apariciones === 1){
+      trabajo = trabajo.replace(p.find, p.replace);
+      return { ...p, ok:true };
+    } else if(apariciones === 0){
+      return { ...p, ok:false, motivo:'No se encontró ese fragmento exacto en el archivo (puede que el archivo haya cambiado)' };
+    } else {
+      return { ...p, ok:false, motivo:`El fragmento aparece ${apariciones} veces — no es único, no se aplicó para evitar romper otra parte` };
+    }
+  });
+  const todosOk = resultados.every(r=>r.ok);
+  contenidoModificado = todosOk ? trabajo : null;
+  resultEl.innerHTML = `
+    <div class="audit-card">
+      <div class="audit-summary ${todosOk?'ok':'warn'}">${todosOk ? '✅ '+escaparHTML(parsed.resumen||'Cambios generados') : '⚠️ Algunos cambios no se pudieron aplicar automáticamente'}</div>
+      ${resultados.map(r=>`
+        <div class="patch-card">
+          <div class="patch-status ${r.ok?'ok':'err'}">${r.ok?'✅ Aplicado':'❌ '+escaparHTML(r.motivo||'No aplicado')}</div>
+          <div class="diff-block">
+            <div><div class="diff-col-title">Antes</div><pre class="diff-pre removed">${escaparHTML(r.find)}</pre></div>
+            <div><div class="diff-col-title">Después</div><pre class="diff-pre added">${escaparHTML(r.replace)}</pre></div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  if(todosOk) toast('Cambios generados — revisá el diff antes de aplicar', 'green');
 }
 
 function escaparHTML(str){
